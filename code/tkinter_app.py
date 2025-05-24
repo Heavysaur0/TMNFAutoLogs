@@ -6,7 +6,7 @@ from tkinter import (
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-from treat_files import treat_new_file, get_map_stats, plot_times
+from treat_files import treat_new_file, get_map_stats, plot_times, move_whole_directory
 from data_handler import save, load
 
 
@@ -44,12 +44,18 @@ class App:
         self.build_main_ui()
 
     def load_saved_data(self):
-        if self.destination and (Path(self.destination) / "data.pkl").exists():
-            self.source, self.destination, self.data = load(Path(self.destination) / "data.pkl")
+        self.source, self.destination, self.data = load("data.pkl")
+        print(f"Loaded data:")
+        print(f"  source - {self.source}")
+        print(f"  destination - {self.destination}")
+        print(f"  data - [")
+        for key, value in self.data.items():
+            print(f"    {key} - {value}")
+        print("  ]")
 
     def save_data(self):
         if self.destination:
-            save((self.source, self.destination, self.data), Path(self.destination) / "data.pkl")
+            save((self.source, self.destination, self.data), "data.pkl")
 
     def clear_window(self):
         for widget in self.master.winfo_children():
@@ -93,9 +99,9 @@ class App:
     def set_destination(self):
         path = filedialog.askdirectory(title="Select Replay Destination Folder")
         if path:
-            if self.destination and (Path(self.destination) / "data.pkl").exists():
-                shutil.move(str(Path(self.destination) / "data.pkl"), path)
-            self.destination = Path(path)
+            new_path = Path(path)
+            move_whole_directory(self.destination, new_path)
+            self.destination = new_path
             self.dest_label.config(text=f"Destination Folder: {self.destination}")
             self.log(f"Selected destination folder: {self.destination}")
             self.save_data()

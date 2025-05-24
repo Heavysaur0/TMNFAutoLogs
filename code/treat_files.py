@@ -13,7 +13,6 @@ from data_handler import save, load
 from parse_replay import is_gbx_file, is_validable, get_map_uid, get_times_match
 
 
-
 def treat_new_file(file: Path, destination: Path, data_dict: dict):
     with open(file, "rb") as f:
         data = f.read()
@@ -38,6 +37,22 @@ def treat_new_file(file: Path, destination: Path, data_dict: dict):
         map_data = get_tmnf_map_info(map_uid)
         data_dict["map_uids"][map_uid] = map_data
 
+    map_folder_path = destination / map_data["name"]
+    data_file_path = map_folder_path / "data.pkl"
+    if not os.path.exists(map_folder_path):
+        os.mkdir(map_folder_path)
+        # No need to create the file, already does it by itself
+        data = {"name": map_data["name"], "runs": {}}
+        save(data, data_file_path)
+    else:
+        data = load(data_file_path)
+    
+    file_hash = get_file_hash(file)
+    if file_hash in data["runs"]:
+        print("Replay file ignored due to duplicate")
+        return
+    data["runs"][file_hash] = replay_info
+    save(data, data_file_path)
 
     replay_info = {}
     
@@ -57,19 +72,6 @@ def treat_new_file(file: Path, destination: Path, data_dict: dict):
 
     utc_date = datetime.now(timezone.utc)
     replay_info["utc_date"] = utc_date
-
-    
-    map_folder_path = destination / map_data["name"]
-    data_file_path = map_folder_path / "data.pkl"
-    if not os.path.exists(map_folder_path):
-        os.mkdir(map_folder_path)
-        # No need to create the file, already does it by itself
-        save({"name": map_data["name"], "runs": {}}, data_file_path)
-    
-    data = load(data_file_path)
-    data["runs"][get_file_hash(file)] = replay_info
-    save(data, data_file_path)
-    
     
     try:
         dst = map_folder_path / file
@@ -89,8 +91,7 @@ def treat_new_file(file: Path, destination: Path, data_dict: dict):
         print(f"Error moving {file.name}: {e}")
         display_error()
         return
-    
-    
+
 def get_map_stats(map_folder: Path | str):
     """
     return of layout:
@@ -144,7 +145,6 @@ def get_map_stats(map_folder: Path | str):
             map_stats[login][time_ms]["stunt_score"] += stunt_score
     
     return map_stats
-    
 
 def plot_times(map_folder: Path | str):
     if not os.path.exists(map_folder):
@@ -206,7 +206,13 @@ def plot_times(map_folder: Path | str):
     plt.legend()
     
     plt.show()
-        
 
-
+def move_whole_directory(source: Path, destination: Path):
+    if source is None: 
+        return
+    
+    shutil.move(str(source / "data.pkl"), str(destination))
+    map_folders = [map_folder for map_folder in source.iterdir() if map_folder.is_dir()]
+    for map_folder in map_folders:
+        shutil.move(str(map_folder), str(destination))
 

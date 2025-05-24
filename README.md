@@ -43,11 +43,7 @@ Open a terminal (Command Prompt or PowerShell on Windows), and run:
 
 ```bash
 python --version
-```
-
-Or:
-
-```bash
+# Or
 python3 --version
 ```
 
@@ -67,6 +63,25 @@ If not, Python is probably not installed.
 4. **Important**: Check the box that says "Add Python to PATH" during installation
 5. Restart your terminal
 
+### Installing Pip
+
+Ensure that pip is also installed with:
+
+```bash
+pip --version
+# Or
+pip3 --version
+```
+
+If not, run those commands:
+
+```bash
+curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+python get-pip.py
+# Or
+python3 get-pip.py
+```
+
 Try `python --version` again to confirm it's working.
 
 ## Step 2: Run the Project
@@ -78,11 +93,7 @@ Once you're in the extracted or cloned project folder:
 
 ```bash
 python run.py
-```
-
-Or, if `python` doesn't work:
-
-```bash
+# Or
 python3 run.py
 ```
 
@@ -103,9 +114,8 @@ The `run.py` script will:
 
 ## Future Features (To Do List)
 
-* Move all replays of the prior destination folder to the new one
 * Make proper stats
-* Avoid registering duplicate replays
+* Make a proper plot
 
 ## Potential Troubles
 
@@ -121,4 +131,4 @@ The beta testing was done only on my computer, some problem may arise and need i
 
 ## Need Help?
 
-Feel free to open an issue on the GitHub repo or contact the author for support.
+Feel free to open an issue on the GitHub repo or contact me for support.

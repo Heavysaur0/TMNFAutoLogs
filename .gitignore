@@ -28,6 +28,7 @@ dist/
 *.tmp
 
 # Ignore specific folders
+folder1/
 folder2/
 test/
 
