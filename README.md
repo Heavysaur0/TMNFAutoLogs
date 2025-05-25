@@ -2,6 +2,8 @@
 
 This is a simple and beginner-friendly Python tool to automatically organize your Trackmania hunting replays, log your times, and visualize your stats.
 
+I thank auxlua for the project idea. The code is meant to upgrade what he did before, to have a open source, and free to access code for everyone.
+
 ## Requirements
 
 * A Windows computer
@@ -86,10 +88,17 @@ Try `python --version` again to confirm it's working.
 
 ## Step 2: Run the Project
 
-Once you're in the extracted or cloned project folder:
+Once you're in the extracted or cloned project folder open a terminal or command prompt in that folder.
 
-1. Open a terminal or command prompt in that folder
-2. Run this command:
+If you have already downloaded the project before and are just updating it I recommend to run first:
+
+```bash
+python sanitise.py
+# Or
+python3 sanitise.py
+```
+
+To run the program you have to type in the command prompt:
 
 ```bash
 python run.py
@@ -111,23 +120,42 @@ The `run.py` script will:
 
   * View stats for a chosen map
   * Plot your performance over time with a simple click
+* Auto updater:
+  
+  * The project folder will auto update by checking the github repo
+  * Handle data changes by sanitising replays
 
 ## Future Features (To Do List)
 
-* Make proper stats
 * Make a proper plot
+* Make it compatible with ModLoader
+* Handle (shomehow) duplicate map names
 
 ## Potential Troubles
 
 The beta testing was done only on my computer, some problem may arise and need involve me for fixing so please reach me out.
 
 ## Having Trouble?
+  
+If you ever think that a problem occured with the replay files (data-wise).  
+You can try to potentially fix it by running `sanitise.py` with:
+
+```bash
+python sanitise.py
+# Or
+python3 sanitise.py
+```
+
+Otherwise:
 
 * Make sure you're in the right folder (where `run.py` is located)
 * Make sure you're connected to the internet (for installing dependencies)
 * Try both `python` and `python3` if one doesn't work
 * Check that your replay paths exist and are correctly set in the GUI
 * Check the terminal console, and send it to Heavysaur0 (me) and ask for help
+
+Try to download the newest version of the project in github.  
+You don't have to worry about data being lost, you just have to re-input the destination folder correctly, everything else is handled by the program.
 
 ## Need Help?
 

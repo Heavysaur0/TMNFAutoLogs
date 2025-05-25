@@ -9,8 +9,8 @@ from error_display import display_error
 from php_like import GBXReplayFetcher
 from file_uid import get_file_hash
 
-from data_handler import save, load
-from parse_replay import is_gbx_file, is_validable, get_map_uid, get_times_match
+from data_handler import save, load, recur_display
+from parse_replay import is_gbx_file, is_gbx_data, is_validable, get_map_uid, get_times_match
 
 
 def treat_new_file(file: Path, destination: Path, data_dict: dict):
@@ -21,7 +21,7 @@ def treat_new_file(file: Path, destination: Path, data_dict: dict):
     if pos != -1:
         file_data = file_data[:pos + 10]
     
-    if not is_gbx_file(file_data):
+    if not is_gbx_data(file_data):
         print("The file is not a GBX replay file.")
         return
     
@@ -29,31 +29,25 @@ def treat_new_file(file: Path, destination: Path, data_dict: dict):
     if not validable:
         print("Replay file is not validable, not displayed in logs.")
         return
-        
+    
     map_uid = get_map_uid(file_data)
+    
     if map_uid in data_dict["map_uids"]:
-        map_data = data_dict["map_uids"][map_uid]
+        map_name = data_dict["map_uids"][map_uid]
+        map_folder_path = destination / map_name
+        data_file_path = map_folder_path / "data.pkl"
+        
+        map_data = load(data_file_path)
     else:
         map_data = get_tmnf_map_info(map_uid)
-        data_dict["map_uids"][map_uid] = map_data
-
-    map_folder_path = destination / map_data["name"]
-    data_file_path = map_folder_path / "data.pkl"
-    if not os.path.exists(map_folder_path):
-        os.mkdir(map_folder_path)
-        # No need to create the file, already does it by itself
-        data = {"name": map_data["name"], "runs": {}}
-        save(data, data_file_path)
-    else:
-        data = load(data_file_path)
+        recur_display("map data", map_data, 0)
+        data_dict["map_uids"][map_uid] = map_data["name"] 
+        map_folder_path = destination / map_data["name"]
+        data_file_path = map_folder_path / "data.pkl"
+        
+        map_data["runs"] = {}
+        map_folder_path.mkdir()
     
-    file_hash = get_file_hash(file)
-    if file_hash in data["runs"]:
-        print("Replay file ignored due to duplicate")
-        return
-    data["runs"][file_hash] = replay_info
-    save(data, data_file_path)
-
     replay_info = {}
     
     replay_fetcher = GBXReplayFetcher(debug=True)
@@ -70,14 +64,22 @@ def treat_new_file(file: Path, destination: Path, data_dict: dict):
         print("[!] User stats not found")
         return
 
-    utc_date = datetime.now(timezone.utc)
+    creation_time = file.stat().st_birthtime
+    utc_date = datetime.fromtimestamp(creation_time)
     replay_info["utc_date"] = utc_date
+    
+    file_hash = get_file_hash(file)
+    if file_hash in map_data["runs"]:
+        print("Replay file ignored due to duplicate")
+        return
+    map_data["runs"][file_hash] = replay_info
+    save(map_data, data_file_path)
     
     try:
         dst = map_folder_path / file
         file_name = Path(file.stem).stem # Remove the Replay Gbx
         index = 0
-        while os.path.exists(dst):
+        while dst.exists():
             dst = map_folder_path / f"{file_name}-({index}).Replay.Gbx"
             index += 1
         try:
@@ -92,33 +94,10 @@ def treat_new_file(file: Path, destination: Path, data_dict: dict):
         display_error()
         return
 
-def get_map_stats(map_folder: Path | str):
-    """
-    return of layout:
-    map_stats = {
-        "names": {..., ..., ...},
-        "login1": {
-            time.1: {
-                "times": ...,
-                "dates": {..., ..., ...},
-                "respawns": ...,
-                "stunt_score": ...,
-            },
-            time.2: {...},
-            ...,
-        }
-        "login2": {...},
-        ...
-    }
-    """
-    if not os.path.exists(map_folder):
-        raise Exception(f"The map folder {map_folder} doesn't exist yet.")
-    data_file = map_folder / "data.pkl" if isinstance(map_folder, Path) else os.path.join(map_folder, "data.pkl")
-    data = load(data_file)["runs"]
-    
+def get_map_stats_from_data(map_data: dict):
     map_stats = {}
     
-    for value in data.values():
+    for value in map_data["runs"].values():
         name = value["user_name"]
         login = value["user_login"]
         time_ms = value["replay_time_ms"]
@@ -145,6 +124,31 @@ def get_map_stats(map_folder: Path | str):
             map_stats[login][time_ms]["stunt_score"] += stunt_score
     
     return map_stats
+
+def get_map_stats(map_folder: Path | str):
+    """
+    return of layout:
+    map_stats = {
+        "login1": {
+            "names": {..., ..., ...},
+            time.1: {
+                "times": ...,
+                "dates": {..., ..., ...},
+                "respawns": ...,
+                "stunt_score": ...,
+            },
+            time.2: {...},
+            ...,
+        }
+        "login2": {...},
+        ...
+    }
+    """
+    if not os.path.exists(map_folder):
+        raise Exception(f"The map folder {map_folder} doesn't exist yet.")
+    data_file = map_folder / "data.pkl" if isinstance(map_folder, Path) else os.path.join(map_folder, "data.pkl")
+    map_data = load(data_file)
+    return get_map_stats_from_data(map_data)
 
 def plot_times(map_folder: Path | str):
     if not os.path.exists(map_folder):
@@ -216,3 +220,41 @@ def move_whole_directory(source: Path, destination: Path):
     for map_folder in map_folders:
         shutil.move(str(map_folder), str(destination))
 
+
+def sanitise_replays(destination: Path, data_dict: dict):
+    data_dict = {"map_uids": {}}
+    temporary_folder = destination / "temp"
+    if not temporary_folder.exists():
+        temporary_folder.mkdir()
+    
+    for folder in destination.iterdir():
+        if folder.name == "temp":
+            continue
+        if not folder.is_dir():
+            print(f"{folder} isn't a folder, removing...")
+            folder.unlink()
+            continue
+        print(f"Moving entire {folder} to temporary folder")
+        for file in folder.iterdir():
+            if file.name == "data.pkl":
+                file.unlink()
+                continue
+            
+            dst = temporary_folder / file
+            file_name = Path(file.stem).stem # Remove the Replay Gbx
+            index = 0
+            while dst.exists():
+                dst = temporary_folder / f"{file_name}-({index}).Replay.Gbx"
+                index += 1
+            shutil.move(str(file), str(dst))
+            print(f"  Moved {file} to temporary folder.")
+        folder.rmdir()
+    
+    for replay_file in temporary_folder.iterdir():
+        
+        if not is_gbx_file(replay_file):
+            print(f"[!] File {replay_file} shouldn't be in temporary folder")
+            continue
+        treat_new_file(replay_file, destination, data_dict)
+    
+    temporary_folder.rmdir()

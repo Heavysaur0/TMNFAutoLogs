@@ -1,13 +1,14 @@
-import shutil
 from pathlib import Path
 from tkinter import (
     Tk, Frame, Label, Button, filedialog, Text, END, DISABLED, NORMAL, Scrollbar, RIGHT, Y
 )
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+from datetime import datetime
 
-from treat_files import treat_new_file, get_map_stats, plot_times, move_whole_directory
-from data_handler import save, load
+from treat_files import treat_new_file, get_map_stats_from_data, plot_times, move_whole_directory, sanitise_replays
+from data_handler import save, load, recur_display
+
 
 
 class FileMover(FileSystemEventHandler):
@@ -22,9 +23,13 @@ class FileMover(FileSystemEventHandler):
             try:
                 treat_new_file(src, self.dest, self.data)
             except IndexError as e:
-                self.log("Error searching map data, contact Heavysaur0 for more info - {e}")
+                self.app.log(f"Error searching map data, contact Heavysaur0 for more info - {e}")
+                print(f"Error searching map data - {e}")
             except Exception as e:
-                self.log("Error searching map data, are you sure the map is uploaded to TMX ?")
+                self.app.log("Error searching map data, are you sure the map is uploaded to TMX ?")
+                print(f"Error searching map data - {e}")
+            
+            self.app.save_data()
 
 
 class App:
@@ -45,13 +50,10 @@ class App:
 
     def load_saved_data(self):
         self.source, self.destination, self.data = load("data.pkl")
-        print(f"Loaded data:")
-        print(f"  source - {self.source}")
-        print(f"  destination - {self.destination}")
-        print(f"  data - [")
-        for key, value in self.data.items():
-            print(f"    {key} - {value}")
-        print("  ]")
+        print("Loaded data:")
+        recur_display("source", self.source, 1)
+        recur_display("destination", self.destination, 1)
+        recur_display("data", self.data, 1)
 
     def save_data(self):
         if self.destination:
@@ -81,6 +83,7 @@ class App:
         self.watch_button.pack(pady=15)
 
         Button(self.frame, text="Map Data", command=self.build_map_data_folder_select_ui).pack(pady=(0, 10))
+        # Button(self.frame, text="Show All Map Stats", command=self.show_all_stats).pack(pady=(0, 10))
 
         self.log_area = Text(self.master, height=15, state=DISABLED)
         scrollbar = Scrollbar(self.master, command=self.log_area.yview)
@@ -185,7 +188,7 @@ class App:
 
         Label(frame, text="Map Data Actions", font=("Arial", 14, "bold")).pack(pady=(0, 10))
 
-        Button(frame, text="Show map stats", command=self.map_stats).pack(pady=5)
+        Button(frame, text="Show map stats", command=self.display_map_stats).pack(pady=5)
         Button(frame, text="Plot map times", command=self.plot_map_times).pack(pady=5)
         Button(frame, text="Back", command=self.build_main_ui).pack(pady=10)
         
@@ -194,28 +197,107 @@ class App:
         self.log_area.config(yscrollcommand=scrollbar.set)
         self.log_area.pack(side="left", fill="both", expand=True, padx=(10, 0))
         scrollbar.pack(side=RIGHT, fill=Y)
+    
+    
+    def show_all_stats(self):
+        pass
 
-    def map_stats(self):
-        map_stats = get_map_stats(self.selected_map_folder)
-        string = ""
-        for login, stats in map_stats.items():
-            string += f"{login} - [\n"
-            string += f"  names - {stats["names"]}\n"
-            for time, stat in stats.items():
-                if time == "names": continue
-                string += f"  {time} - [\n"
-                for key, value in stat.items():
-                    if key == "dates":
-                        string += "    dates - { "
-                        for dt in value:
-                            string += str(dt.astimezone()) + " "
-                        string += "}\n"
-                    else:
-                        string += f"    {key} - {value}\n"
-                string += "  ]\n"
-            string += "]\n"
+
+    def display_map_stats(self):
+        """
+        Goal of stats is to display:
         
-        self.log(string)
+        Map: map_data["name"]
+        Author: map_data["author]
+        Section: map_data["section"]
+        Environment: map_data["environment"]
+        Type: map_data["type"]
+        Mood: map_data["mood"]
+        | Record Times | Total | Players | Date (local time) | Respawn avr. | Stuntscore avr. |
+        | ------------ | ----- | ------- | ----------------- | ------------ | --------------- |
+        | ............ | ..... | ....... | ................. | ............ | ............... |
+        
+        text being justified on the right
+        """
+        data_file = self.selected_map_folder / "data.pkl"
+        map_data = load(data_file)
+        recur_display("map_data", map_data, 0)
+        
+        map_stats = get_map_stats_from_data(map_data)
+        stats = []
+        for login, dic in map_stats.items():
+            for key, value in dic.items():
+                if key == "names": 
+                    continue
+                
+                min_date = min(value["dates"], key=lambda dt: dt.timestamp())
+                total = value["times"]
+                respawn_avr = value["respawns"] / total
+                stuntscore_avr =  value["stunt_score"] / total
+                stats.append((key / 1000, total, login, min_date, respawn_avr, stuntscore_avr))
+        
+        stats.sort(key=lambda lst: lst[3].timestamp()) # Sort by date
+        stats.sort(key=lambda lst: lst[0]) # Sort by time
+        
+        # Add headers
+        header_titles = [
+            "Record Times", "Total", "Players", 
+            "Date (local time)", "Respawn avr.", "Stuntscore avr."
+        ]
+        
+        def format_value(i, value):
+            if i == 0:
+                hours = int(value // 3600)
+                minutes = int((value % 3600) // 60)
+                secs = value % 60
+                
+                if hours > 0:
+                    return f"{hours}:{minutes:02}:{secs:05.2f}"
+                if minutes > 0:
+                    return f"{minutes}:{secs:05.2f}"
+                return f"{secs:.2f}"
+            if i == 1 or i == 2:
+                return str(value)
+            if i == 3:
+                return value.strftime('%Y-%m-%d %H:%M:%S')
+            return f"{value:.2f}"
+        
+        # Determine max column width
+        col_widths = [len(title) for title in header_titles]
+        for row in stats:
+            for i, value in enumerate(row):
+                formatted = format_value(i, value)
+                col_widths[i] = max(col_widths[i], len(formatted))
+        
+        # Create the header
+        header_line = " | ".join(title.rjust(col_widths[i]) for i, title in enumerate(header_titles))
+        separator = " | ".join("-" * col_widths[i] for i in range(len(col_widths)))
+
+        # Build stat lines
+        stat_lines = []
+        for row in stats:
+            line = " | ".join(
+                format_value(i, value).rjust(col_widths[i])
+                for i, value in enumerate(row)
+            )
+            stat_lines.append(line)
+
+        # Assemble final text
+        lines = [
+            f"Map: {map_data['name']}",
+            f"Author: {map_data['author']}",
+            f"Section: {map_data['section']}",
+            f"Environment: {map_data['environment']}",
+            f"Type: {map_data['type']}",
+            f"Mood: {map_data['mood']}",
+            "",
+            f"| {header_line} |",
+            f"| {separator} |",
+        ]
+        for stat_line in stat_lines:
+            lines.append(f"| {stat_line} |")
+
+        self.log("\n".join(lines))
 
     def plot_map_times(self):
         plot_times(self.selected_map_folder)

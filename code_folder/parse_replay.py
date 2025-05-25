@@ -1,12 +1,18 @@
 import re
+from pathlib import Path
 
 from php_like import GBXReplayFetcher
 from error_display import display_error
 
 from track_name import get_tmnf_map_info
 
-def is_gbx_file(file_data: str) -> bool:
-    return file_data[:3] == "GBX"
+def is_gbx_file(file_path: Path | str) -> bool:
+    with open(file_path, "rb") as f:
+        data = f.read()
+    return is_gbx_data(data.decode(errors="ignore"))
+
+def is_gbx_data(file_data: str) -> bool:
+    return len(file_data) >= 3 and file_data[:3] == "GBX"
 
 def is_validable(file_data: str) -> bool:
     match = re.search(r' validable="([01])"/>', file_data)
@@ -35,7 +41,7 @@ def parse_trackmania_replay(file_path: str) -> dict:
         data = f.read()
     file_data = data.decode(errors="ignore")
     
-    if not is_gbx_file(file_data):
+    if not is_gbx_data(file_data):
         print("The file is not a GBX replay file.")
     
     validable = is_validable(file_data)

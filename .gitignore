@@ -32,6 +32,9 @@ folder1/
 folder2/
 test/
 
+# Ignore specific files
+tempCodeRunnerFile.py
+
 # Ignore all .pkl files
 *.pkl
 **/*.pkl
